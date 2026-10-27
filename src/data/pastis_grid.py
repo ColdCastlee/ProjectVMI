@@ -56,6 +56,7 @@ def add_utm_grid(meta, margin_px=5):
     meta = meta.copy()
     meta["TILE"] = meta["TILE"].str.lower()
     meta["epsg"] = meta["TILE"].map(tile_epsg).astype(int)
+    meta["footprint_ok"] = False  # boolean column, filled per zone below
     side = SIZE * PIXEL
     m = margin_px * PIXEL
     for epsg, sub in meta.groupby("epsg"):
