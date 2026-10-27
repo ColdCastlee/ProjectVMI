@@ -15,7 +15,8 @@ integer crop on the 10 m-snapped grid (no bilinear resampling), so its transform
 starts at (x0, y1) instead of the raw footprint corner (x0_raw, y1_raw).
 
 Example (pilot shard, before the full run is merged):
-    python scripts/export_rf_layout.py --pastis /content/drive/MyDrive/pj_vmi/pastis_subset \n        --processed /content/processed \
+    python scripts/export_rf_layout.py --pastis /content/drive/MyDrive/pj_vmi/pastis_subset \
+        --processed /content/processed \
         --name tessera_2019 --shard /content/pilot/tessera_2019/pilot_0000.npz --root /content/rf_layout
 """
 
