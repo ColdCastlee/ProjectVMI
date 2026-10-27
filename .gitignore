@@ -1,0 +1,15 @@
+# data never goes to git
+*.npy
+*.npz
+*.zip
+*.tif
+/data/
+/processed/
+/shards/
+/runs/
+
+# python / notebooks
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
