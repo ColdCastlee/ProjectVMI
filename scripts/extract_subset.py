@@ -23,8 +23,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.pastis_zip import open_pastis  # noqa: E402
-from src.data.selection import read_selection, tile_sample  # noqa: E402
+from src.data.pastis_zip import open_pastis
+from src.data.selection import read_selection, tile_sample
 
 
 def main():

@@ -30,10 +30,10 @@ import rasterio
 from rasterio.transform import from_origin
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.embeddings import open_processed, open_shard  # noqa: E402
-from src.data.pastis_grid import PIXEL  # noqa: E402
-from src.data.pastis_zip import open_pastis  # noqa: E402
-from src.data.selection import read_selection, write_selection  # noqa: E402
+from src.data.embeddings import open_processed, open_shard
+from src.data.pastis_grid import PIXEL
+from src.data.pastis_zip import open_pastis
+from src.data.selection import read_selection, write_selection
 
 
 def default_dataset_dir(name):

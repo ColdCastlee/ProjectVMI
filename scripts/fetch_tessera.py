@@ -25,9 +25,9 @@ import pandas as pd
 from geotessera import GeoTesseraZarr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.align_qa import SHIFTS, best_shift, shift_scores  # noqa: E402
-from src.data.pastis_grid import SIZE  # noqa: E402
-from src.data.shards import code_version, run_sharded  # noqa: E402
+from src.data.align_qa import SHIFTS, best_shift, shift_scores
+from src.data.pastis_grid import SIZE
+from src.data.shards import code_version, run_sharded
 
 N_DIM = 128
 MARGIN = 1  # extra pixels around the patch, used by the shift test

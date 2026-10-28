@@ -27,9 +27,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.align_qa import SHIFTS, best_shift, shift_scores  # noqa: E402
-from src.data.pastis_grid import PIXEL, SIZE  # noqa: E402
-from src.data.shards import code_version, run_sharded  # noqa: E402
+from src.data.align_qa import SHIFTS, best_shift, shift_scores
+from src.data.pastis_grid import PIXEL, SIZE
+from src.data.shards import code_version, run_sharded
 
 COLLECTION = "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
 BANDS = [f"A{k:02d}" for k in range(64)]

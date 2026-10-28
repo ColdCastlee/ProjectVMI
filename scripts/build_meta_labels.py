@@ -17,9 +17,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.pastis_grid import SIZE, add_utm_grid  # noqa: E402
-from src.data.pastis_zip import open_pastis  # noqa: E402
-from src.data.selection import fold_selection, write_selection  # noqa: E402
+from src.data.pastis_grid import SIZE, add_utm_grid
+from src.data.pastis_zip import open_pastis
+from src.data.selection import fold_selection, write_selection
 
 # Official PASTIS cross-validation: name -> (train folds, val fold, test fold)
 OFFICIAL_FOLDS = {
@@ -39,7 +39,7 @@ def parse_dates(value):
 
 
 def make_splits(meta, seed, val_frac):
-    idx_of = lambda mask: meta.index[mask].tolist()  # noqa: E731
+    idx_of = lambda mask: meta.index[mask].tolist()
     splits = {"official": {}, "leave_one_tile_out": {}}
     for name, (train, val, test) in OFFICIAL_FOLDS.items():
         splits["official"][name] = {
@@ -118,7 +118,7 @@ def main():
 
     # Full read of a few S2 files. Two kinds of negative values: small negative
     # reflectances (keep int16, never cast to uint16) and the THEIA fill -10000,
-    # which can cover whole dates (Method 2 must skip those dates).
+    # which can cover whole dates.
     rng = np.random.default_rng(args.seed)
     sample = rng.choice(meta.ID_PATCH[meta.s2_T > 0], size=min(args.s2_sample, n), replace=False)
     n_neg, n_fill_dates, valid_min = 0, 0, 0

@@ -1,4 +1,4 @@
-"""Quality check of the aligned data (plan, section 3.6).
+"""Quality check of the aligned embeddings.
 
 1. Table: summary of qa_<name>.csv and meta_qa.csv with one ok_<name> flag per
    embedding: no error, no-data <= --max-nodata, and no suspect shift. A shift
@@ -24,16 +24,16 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from matplotlib.colors import ListedColormap  # noqa: E402
-from sklearn.decomposition import PCA  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.colors import ListedColormap
+from sklearn.decomposition import PCA
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.embeddings import open_processed  # noqa: E402
-from src.data.pastis_zip import open_pastis  # noqa: E402
-from src.data.selection import tile_sample  # noqa: E402
+from src.data.embeddings import open_processed
+from src.data.pastis_zip import open_pastis
+from src.data.selection import tile_sample
 
 DEFAULT_NAMES = ["tessera_2019", "tessera_2018", "ae_2019", "ae_2018"]
 
@@ -118,7 +118,7 @@ def plot_patches(ids, meta, labels, instances, embs, pz, dates, seed, title, pat
             ax.set_axis_off()
     var = ", ".join(f"{n}: {pcs[n][1].sum():.0%}" for n in names)
     fig.suptitle(f"{title} - PCA variance explained (3 comp.): {var}", fontsize=9)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 1 - 0.5 / fig.get_figheight()))  # keep room for the suptitle
     fig.savefig(path, dpi=110)
     plt.close(fig)
     return s2_mins
