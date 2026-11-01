@@ -12,6 +12,10 @@ import numpy as np
 N_CLASSES = 19  # 0 background, 1-18 crops
 VOID = 19
 CROPS = np.arange(1, N_CLASSES)
+CLASS_NAMES = ["Background", "Meadow", "Soft winter wheat", "Corn", "Winter barley", "Winter rapeseed",
+               "Spring barley", "Sunflower", "Grapevine", "Beet", "Winter triticale", "Winter durum wheat",
+               "Fruits, vegetables, flowers", "Potatoes", "Leguminous fodder", "Soybeans", "Orchard",
+               "Mixed cereal", "Sorghum"]  # documentation/label_names.json of the PASTIS benchmark
 
 
 def confusion_matrix(y_true, y_pred, valid=None, n_classes=N_CLASSES):
