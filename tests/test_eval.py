@@ -5,7 +5,7 @@ import csv
 import numpy as np
 import pytest
 
-from src.eval.bootstrap import bootstrap_miou, paired_delta
+from src.eval.bootstrap import bootstrap_miou, bootstrap_miou_seeds, paired_delta, paired_delta_seeds
 from src.eval.metrics import (CROPS, confusion_matrix, crops_only, miou, per_class_f1, per_class_iou,
                               summarize)
 from src.eval.regions import boundary_core
@@ -90,6 +90,23 @@ def test_paired_delta():
     assert out["delta"] > 0 and out["ci_low"] > 0 and out["share_le_0"] == 0
     with pytest.raises(ValueError):
         paired_delta(cms, cms[:-1])
+
+
+def test_seed_aggregates():
+    rng = np.random.default_rng(1)
+    a = [rng.integers(0, 20, size=(25, 3, 3)) for _ in range(3)]
+    b = [x + 30 * np.eye(3, dtype=int) for x in a]
+    one = paired_delta_seeds(a[:1], b[:1], n_boot=200)
+    ref = paired_delta(a[0], b[0], n_boot=200)
+    assert one["delta"] == pytest.approx(ref["delta"]) and one["ci_low"] == pytest.approx(ref["ci_low"])
+    out = paired_delta_seeds(a, b, n_boot=200)
+    assert out["delta"] == pytest.approx(np.mean(out["per_seed"])) and out["ci_low"] > 0
+    same = paired_delta_seeds(a, a, n_boot=200)
+    assert same["delta"] == 0 and same["ci_low"] == 0 and same["ci_high"] == 0
+    agg = bootstrap_miou_seeds(a, n_boot=200)
+    assert agg["miou"] == pytest.approx(np.mean(agg["per_seed"])) and agg["ci_low"] <= agg["miou"] <= agg["ci_high"]
+    with pytest.raises(ValueError):
+        paired_delta_seeds(a, [x[:-1] for x in b])
 
 
 def test_run_evaluator_and_log_run(tmp_path):

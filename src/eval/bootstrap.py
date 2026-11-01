@@ -49,3 +49,42 @@ def paired_delta(cms_a, cms_b, n_boot=1000, seed=0, classes=None, level=0.95):
     point = float(miou(cms_b.sum(axis=0), classes) - miou(cms_a.sum(axis=0), classes))
     lo, hi = interval(delta, level)
     return {"delta": point, "ci_low": lo, "ci_high": hi, "share_le_0": float(np.mean(delta <= 0))}
+
+
+def _check_same_patches(cms_list):
+    shapes = {np.asarray(c).shape for c in cms_list}
+    if len(shapes) != 1:
+        raise ValueError(f"different shapes {shapes}: not the same test patches")
+
+
+def bootstrap_miou_seeds(cms_list, n_boot=1000, seed=0, classes=None, level=0.95):
+    """Mean mIoU over training seeds; cms_list holds one (N, K, K) array per seed, same test patches.
+
+    The interval comes from the patch bootstrap (the same draws for every seed);
+    std_seeds is the spread between seeds.
+    """
+    _check_same_patches(cms_list)
+    w = draw_weights(len(cms_list[0]), n_boot, seed)
+    reps = np.mean([replicate_miou(c, w, classes) for c in cms_list], axis=0)
+    points = [float(miou(np.asarray(c).sum(axis=0), classes)) for c in cms_list]
+    lo, hi = interval(reps, level)
+    return {"miou": float(np.mean(points)), "std_seeds": float(np.std(points, ddof=1)) if len(points) > 1 else 0.0,
+            "ci_low": lo, "ci_high": hi, "per_seed": points}
+
+
+def paired_delta_seeds(cms_a, cms_b, n_boot=1000, seed=0, classes=None, level=0.95):
+    """Mean over seeds of mIoU(b) - mIoU(a); cms_a and cms_b are lists with one (N, K, K) array per seed.
+
+    The same patch draws are used for every seed and both variants.
+    """
+    _check_same_patches(list(cms_a) + list(cms_b))
+    if len(cms_a) != len(cms_b):
+        raise ValueError("not the same number of seeds")
+    w = draw_weights(len(cms_a[0]), n_boot, seed)
+    reps = np.mean([replicate_miou(b, w, classes) - replicate_miou(a, w, classes) for a, b in zip(cms_a, cms_b)],
+                   axis=0)
+    per_seed = [float(miou(np.asarray(b).sum(axis=0), classes) - miou(np.asarray(a).sum(axis=0), classes))
+                for a, b in zip(cms_a, cms_b)]
+    lo, hi = interval(reps, level)
+    return {"delta": float(np.mean(per_seed)), "ci_low": lo, "ci_high": hi,
+            "share_le_0": float(np.mean(reps <= 0)), "per_seed": per_seed}
