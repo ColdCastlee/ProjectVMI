@@ -10,3 +10,5 @@ matplotlib>=3.8
 # Evaluation
 scipy>=1.11
 pytest>=7
+# Training (preinstalled on Colab GPU runtimes)
+torch>=2.3
