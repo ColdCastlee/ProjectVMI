@@ -1,0 +1,7 @@
+# B1: TESSERA 2019, pixel MLP (two 1x1 convolutions, no spatial context)
+method: baseline
+prefix: base
+variant: mlp-t19
+sources: [tessera_2019]
+head: mlp
+hidden: 128

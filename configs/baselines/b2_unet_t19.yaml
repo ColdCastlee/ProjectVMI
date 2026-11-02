@@ -1,0 +1,7 @@
+# B2: TESSERA 2019, light UNet; the width (32-64-128 or 64-128-256) is chosen on the validation patches of fold I
+method: baseline
+prefix: base
+variant: unet-t19
+sources: [tessera_2019]
+head: unet
+widths: [32, 64, 128]

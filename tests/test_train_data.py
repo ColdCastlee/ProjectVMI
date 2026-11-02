@@ -63,8 +63,9 @@ def test_standardisation_and_no_data(tmp_path):
 def test_noise_is_fixed_per_seed_and_patch(tmp_path):
     stack = InputStack(tmp_path, ["noise"], noise_seed=3, size=SIZE)
     assert stack.in_channels == 64
-    same = np.random.default_rng([3, 2]).standard_normal((64, SIZE, SIZE), dtype=np.float32)
+    same = np.random.default_rng([3, 2]).standard_normal((64, SIZE, SIZE), dtype=np.float32).astype(np.float16)
     np.testing.assert_array_equal(stack.read(2)["noise"], same)
+    np.testing.assert_array_equal(stack.read_many([1, 2])["noise"][1], same)
     np.testing.assert_array_equal(noise_patch(3, 2, SIZE), same)
     assert not np.array_equal(stack.read(1)["noise"], same)
 

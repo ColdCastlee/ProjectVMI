@@ -4,8 +4,8 @@ A variant is a list of sources stacked as input channels, e.g.
 ["tessera_2019", "ae_2019"] -> 128 + 64 = 192 channels. Sources:
 - tessera_<year>: <name>_q.npy int8 (N, 128, H, W) and <name>_scale.npy float32 (N, H, W);
 - ae_<year>: <name>.npy float16 (N, 64, H, W);
-- noise: 64 channels of N(0, 1), fixed per (seed, patch) with the same generator
-  as scripts/m1_linear_heads.py, so both heads see the same noise.
+- noise: 64 channels of N(0, 1) stored as float16, fixed per (seed, patch) with the
+  same generator as scripts/m1_linear_heads.py (same values up to float16 rounding).
 
 The Dataset returns every source in its stored dtype (2 MB per patch for TESSERA
 instead of 8 MB in float32); `InputStack.decode` turns a batch into float32 on
@@ -32,7 +32,8 @@ NOISE_DIM = 64
 
 
 def noise_patch(seed, i, size=128):
-    return np.random.default_rng([seed, int(i)]).standard_normal((NOISE_DIM, size, size), dtype=np.float32)
+    rng = np.random.default_rng([seed, int(i)])
+    return rng.standard_normal((NOISE_DIM, size, size), dtype=np.float32).astype(np.float16)
 
 
 class InputStack:
@@ -61,18 +62,23 @@ class InputStack:
         self.std = torch.ones(self.in_channels)
         self.fit_patches = None  # patches used by fit_stats
 
-    def read(self, i):
-        """Stored values of patch i as numpy arrays; keys are the sources and '<source>/scale' for TESSERA."""
+    def read_many(self, idx):
+        """Stored values of the patches `idx`, stacked; keys are the sources and '<source>/scale' for TESSERA."""
+        idx = np.asarray(idx, dtype=np.int64)
         out = {}
         for s in self.sources:
             if s == NOISE:
-                out[s] = noise_patch(self.noise_seed, i, self.size)
+                out[s] = np.stack([noise_patch(self.noise_seed, i, self.size) for i in idx])
                 continue
             emb, scale = self.arrays[s]
-            out[s] = np.array(emb[int(i)])
+            out[s] = np.asarray(emb[idx])
             if scale is not None:
-                out[f"{s}/scale"] = np.array(scale[int(i)])
+                out[f"{s}/scale"] = np.asarray(scale[idx])
         return out
+
+    def read(self, i):
+        """Stored values of patch i (same keys as read_many)."""
+        return {k: v[0] for k, v in self.read_many([i]).items()}
 
     def to_float(self, raw):
         """(B, C, H, W) float32 before standardisation, from a batch of stored values (tensors)."""
