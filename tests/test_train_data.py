@@ -46,6 +46,8 @@ def test_decode_matches_the_stored_values(tmp_path):
 def test_standardisation_and_no_data(tmp_path):
     _, _, _, _, valid = fake_processed(tmp_path)
     stack = InputStack(tmp_path, ["tessera_2019", "ae_2019"], size=SIZE).fit_stats(range(4), valid)
+    assert stack.fit_patches.tolist() == [0, 1, 2, 3]
+    assert len(InputStack(tmp_path, ["ae_2019"], size=SIZE).fit_stats(range(4), valid, max_patches=2).fit_patches) == 2
     xs = torch.cat([stack.decode(batch(stack, i))[0][:, torch.from_numpy(valid[i])] for i in range(4)], 1)
     mean = xs.mean(1)
     std = ((xs - mean[:, None]) ** 2).mean(1).sqrt()

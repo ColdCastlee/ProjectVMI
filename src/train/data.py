@@ -59,6 +59,7 @@ class InputStack:
         self.in_channels = sum(self.channels)
         self.mean = torch.zeros(self.in_channels)
         self.std = torch.ones(self.in_channels)
+        self.fit_patches = None  # patches used by fit_stats
 
     def read(self, i):
         """Stored values of patch i as numpy arrays; keys are the sources and '<source>/scale' for TESSERA."""
@@ -112,6 +113,7 @@ class InputStack:
         std = (total_sq / n - mean ** 2).clamp_min(0).sqrt()
         std[std < 1e-6] = 1.0
         self.mean, self.std = mean.float(), std.float()
+        self.fit_patches = np.sort(patches)
         return self
 
     def state(self):
