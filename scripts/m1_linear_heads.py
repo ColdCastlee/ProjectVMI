@@ -1,10 +1,8 @@
 """Pixel-wise linear heads on frozen embeddings (multinomial logistic regression), over several seeds.
 
-Plan, section 5: B0 = TESSERA 2019 and B3 = AlphaEarth 2019 with a logistic
-regression per pixel. The same head is also trained on TESSERA 2019 + AlphaEarth
-2019 (concatenation) and on TESSERA 2019 + 64 channels of Gaussian noise (control:
-does a gain come only from having more dimensions?). This is a first, linear look
-at hypothesis H1a; the main Method 1 variants use the UNet head.
+Trains a per-pixel logistic regression head on TESSERA 2019, AlphaEarth 2019,
+their concatenation (TESSERA 2019 + AlphaEarth 2019), and a dimensionality
+control (TESSERA 2019 + 64 channels of Gaussian noise).
 
 For each seed, all variants share the training pixels (sampled from the valid
 pixels of every training patch) and the noise; the seed changes the pixel sample
@@ -40,19 +38,19 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from sklearn.exceptions import ConvergenceWarning  # noqa: E402
-from sklearn.linear_model import LogisticRegression  # noqa: E402
-from sklearn.preprocessing import StandardScaler  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.exceptions import ConvergenceWarning
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.data.embeddings import open_processed  # noqa: E402
-from src.data.splits import load_split, split_tag  # noqa: E402
-from src.eval.bootstrap import bootstrap_miou, bootstrap_miou_seeds, paired_delta_seeds  # noqa: E402
-from src.eval.metrics import CLASS_NAMES, N_CLASSES  # noqa: E402
-from src.eval.runs import RunEvaluator, load_cms, log_run, run_name  # noqa: E402
+from src.data.embeddings import open_processed
+from src.data.splits import load_split, split_tag
+from src.eval.bootstrap import bootstrap_miou, bootstrap_miou_seeds, paired_delta_seeds
+from src.eval.metrics import CLASS_NAMES, N_CLASSES
+from src.eval.runs import RunEvaluator, load_cms, log_run, run_name
 
 SHORT = {"tessera_2019": "t19", "tessera_2018": "t18", "ae_2019": "ae19", "ae_2018": "ae18", "noise": "noise"}
 DEFAULT_VARIANTS = ["tessera_2019", "ae_2019", "tessera_2019+ae_2019", "tessera_2019+noise"]

@@ -1,4 +1,4 @@
-"""Method 1: how redundant are TESSERA and AlphaEarth? (plan, section 6: CKA and CCA on about 100,000 train pixels)
+"""Redundancy analysis between TESSERA and AlphaEarth embeddings.
 
 Samples valid pixels from the training patches of a split (the same pixels for
 every embedding) and reports:
@@ -26,16 +26,16 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.analysis.similarity import (canonical_correlations, center, dims_for,  # noqa: E402
+from src.analysis.similarity import (canonical_correlations, center, dims_for,
                                      explained_variance, linear_cka, ridge_r2)
-from src.data.embeddings import open_processed  # noqa: E402
-from src.data.shards import code_version  # noqa: E402
-from src.data.splits import load_split  # noqa: E402
+from src.data.embeddings import open_processed
+from src.data.shards import code_version
+from src.data.splits import load_split
 
 NAMES = ["tessera_2019", "ae_2019", "tessera_2018", "ae_2018"]
 PAIRS = [("tessera_2019", "ae_2019"), ("tessera_2018", "ae_2018"),
