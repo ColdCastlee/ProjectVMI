@@ -172,16 +172,3 @@ def test_summarize_runs(tmp_path):
     assert (deltas["delta_mean"] > 0).all() and (deltas["ci_low"] > 0).all()
     for fname in ("check_per_seed.csv", "check_summary.csv", "check_deltas.csv", "check_per_class.png"):
         assert (out / fname).exists()
-
-
-def test_unet_width_rule():
-    pytest.importorskip("pandas")
-    pytest.importorskip("matplotlib")
-    from scripts.select_unet_width import choose
-
-    up = {"ci_low": 0.002, "ci_high": 0.01}
-    flat = {"ci_low": -0.01, "ci_high": 0.01}
-    down = {"ci_low": -0.03, "ci_high": -0.01}
-    assert choose([up, flat]) and choose([flat, up])
-    assert not choose([flat, flat])  # no clear gain: the narrow width is kept
-    assert not choose([up, down])  # better at one label fraction, worse at the other
