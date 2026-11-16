@@ -1,0 +1,7 @@
+# M1-1: early concatenation [TESSERA 2019; AlphaEarth 2019] = 192 channels, light UNet
+method: m1
+prefix: m1
+variant: unet-t19-ae19
+sources: [tessera_2019, ae_2019]
+head: unet
+widths: [32, 64, 128]

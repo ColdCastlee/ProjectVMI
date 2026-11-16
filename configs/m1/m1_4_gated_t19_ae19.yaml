@@ -1,0 +1,7 @@
+# M1-4: pixel-wise gate between TESSERA 2019 and AlphaEarth 2019, then the light UNet
+method: m1
+prefix: m1
+variant: gated-t19-ae19
+sources: [tessera_2019, ae_2019]
+head: gated
+widths: [32, 64, 128]

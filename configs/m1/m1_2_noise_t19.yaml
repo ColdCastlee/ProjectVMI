@@ -1,0 +1,7 @@
+# M1-2: [TESSERA 2019; 64 channels of N(0, 1) noise], light UNet: is the gain of M1-1 only due to more channels?
+method: m1
+prefix: m1
+variant: unet-t19-noise
+sources: [tessera_2019, noise]
+head: unet
+widths: [32, 64, 128]

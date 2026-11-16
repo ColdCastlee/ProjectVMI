@@ -104,3 +104,21 @@ def test_val_matrices_added_to_finished_run(processed):
     assert again["finished_utc"] == row["finished_utc"]  # not trained again
     idx2, cms2 = load_cms(d, part="val")
     assert np.array_equal(idx2, idx) and np.array_equal(cms2, cms)
+
+
+def test_gated_run_and_late_fusion(processed):
+    from scripts.m1_late_fusion import late_cms
+    from src.train.loop import load_trained
+
+    row = run(processed, "runs", config(sources=["ae_2019", "noise"], head="gated", variant="gated-test"))
+    assert row["run_id"] == "base_gated-test-w4_100_foldI_s0"
+    d = processed / "runs" / row["run_id"]
+    # late fusion of a run with itself gives the predictions of that run
+    member = load_trained(d, processed, torch.device("cpu"))
+    labels = np.load(processed / "labels.npy")
+    valid = np.load(processed / "valid_mask.npy")
+    instances = np.load(processed / "instances.npy")
+    idx, cms = late_cms([member, member], labels, instances, valid, [10, 11], torch.device("cpu"), 4, 0)
+    idx0, cms0 = load_cms(d)
+    assert np.array_equal(idx, idx0) and np.array_equal(cms, np.stack([cms0, load_cms(d, "boundary")[1],
+                                                                        load_cms(d, "core")[1]], axis=1))

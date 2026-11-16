@@ -75,7 +75,7 @@ class TrainConfig:
 
     @property
     def run_variant(self):
-        return f"{self.variant}-w{self.widths[0]}" if self.head == "unet" else self.variant
+        return f"{self.variant}-w{self.widths[0]}" if self.head in ("unet", "gated") else self.variant
 
     @property
     def run_id(self):
@@ -121,8 +121,8 @@ def evaluate(model, stack, labels, instances, valid, patches, device, amp, batch
     return evaluator.result()
 
 
-def add_val_cms(run_dir, processed, device, log=print):
-    """Validation matrices of a run finished before they were saved, from best.pt and run.json.
+def load_trained(run_dir, processed, device, valid=None):
+    """(config, input stack, model with the kept weights on `device`) of a finished run.
 
     The standardisation is fitted again on the patches recorded in run.json (stats_patches),
     which gives the statistics of the run.
@@ -130,17 +130,27 @@ def add_val_cms(run_dir, processed, device, log=print):
     run_dir, processed = Path(run_dir), Path(processed)
     info = json.loads((run_dir / "run.json").read_text())
     cfg = TrainConfig(**info["config"])
-    amp = cfg.amp and device.type == "cuda"
+    if valid is None:
+        valid = np.load(processed / "valid_mask.npy")
+    stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=valid.shape[-1])
+    fit = np.asarray(info["stats_patches"])
+    stack.fit_stats(fit, valid, max_patches=len(fit))
+    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout,
+                       stack.channels)
+    model.load_state_dict(torch.load(run_dir / "best.pt", map_location="cpu"))
+    return cfg, stack, model.to(device).eval()
+
+
+def add_val_cms(run_dir, processed, device, log=print):
+    """Validation matrices of a run finished before they were saved, from best.pt and run.json."""
+    run_dir, processed = Path(run_dir), Path(processed)
+    info = json.loads((run_dir / "run.json").read_text())
     labels = np.load(processed / "labels.npy")
     valid = np.load(processed / "valid_mask.npy")
     instances = np.load(processed / "instances.npy", mmap_mode="r")
+    cfg, stack, model = load_trained(run_dir, processed, device, valid)
+    amp = cfg.amp and device.type == "cuda"
     val = np.asarray(load_split(processed, cfg.split)["val"])
-    stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=labels.shape[-1])
-    fit = np.asarray(info["stats_patches"])
-    stack.fit_stats(fit, valid, max_patches=len(fit))
-    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout)
-    model.load_state_dict(torch.load(run_dir / "best.pt", map_location="cpu"))
-    model.to(device)
     idx, cms = evaluate(model, stack, labels, instances, valid, val, device, amp, cfg.eval_batch_size, cfg.workers)
     save_cms(run_dir, idx, cms, "val")
     m = float(miou(cms[:, 0].sum(axis=0)))
@@ -194,7 +204,8 @@ def train_run(cfg, processed, runs_dir, runs_csv, device=None, stop_at=None, rer
 
     set_seed(cfg.seed)
     stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=labels.shape[-1])
-    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout).to(device)
+    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout,
+                       stack.channels).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda s: 0.5 * (1 + math.cos(math.pi * min(s, cfg.steps) / cfg.steps)))

@@ -4,7 +4,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from src.models.unet import LightUNet, PixelMLP, build_head, count_parameters
+from src.models.unet import GatedFusionUNet, LightUNet, PixelMLP, build_head, count_parameters
 
 
 def test_unet_keeps_the_patch_size():
@@ -43,5 +43,26 @@ def test_unet_uses_the_neighbours():
 def test_build_head():
     assert isinstance(build_head("unet", 10), LightUNet)
     assert isinstance(build_head("mlp", 10), PixelMLP)
+    assert isinstance(build_head("gated", 10, splits=[6, 4]), GatedFusionUNet)
     with pytest.raises(ValueError):
         build_head("transformer", 10)
+    with pytest.raises(ValueError):
+        build_head("gated", 10, splits=[6, 5])  # channels do not add up
+
+
+def test_gated_head():
+    model = GatedFusionUNet([6, 4], n_classes=5, widths=(8, 16, 32)).eval()
+    x = torch.randn(2, 10, 16, 16)
+    with torch.no_grad():
+        assert model(x).shape == (2, 5, 16, 16)
+        a = model.alpha(x)
+        assert a.shape == (2, 1, 16, 16) and ((a > 0) & (a < 1)).all()
+        # a gate fully open on the first source: the second source no longer changes the output
+        model.gate.weight.zero_()
+        model.gate.bias.fill_(50.0)
+        y = x.clone()
+        y[:, 6:] += 3.0
+        assert torch.allclose(model(x), model(y), atol=1e-5)
+        y = x.clone()
+        y[:, :6] += 3.0
+        assert not torch.allclose(model(x), model(y), atol=1e-3)

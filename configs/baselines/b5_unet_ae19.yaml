@@ -1,0 +1,7 @@
+# B5: AlphaEarth 2019, light UNet (same width as B2)
+method: baseline
+prefix: base
+variant: unet-ae19
+sources: [ae_2019]
+head: unet
+widths: [32, 64, 128]
