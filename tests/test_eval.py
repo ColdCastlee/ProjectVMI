@@ -133,3 +133,55 @@ def test_run_evaluator_and_log_run(tmp_path):
     log_run(tmp_path / "runs.csv", tmp_path / run["run_id"], run, idx, cms)  # rerun: same line replaced
     with open(tmp_path / "runs.csv") as f:
         assert len(list(csv.DictReader(f))) == 1
+
+
+def test_summarize_runs(tmp_path):
+    pytest.importorskip("pandas")
+    pytest.importorskip("matplotlib")
+    from scripts.summarize_runs import summarize_runs
+
+    rng = np.random.default_rng(0)
+    n_patches, size = 12, 8
+    labels = rng.integers(0, 3, size=(n_patches, size, size), dtype=np.uint8)
+    instances = np.zeros((n_patches, size, size), dtype=np.int32)
+    instances[:, :, :4], instances[:, :, 4:] = 1, 2
+    valid = np.ones_like(labels, dtype=bool)
+    runs_dir, runs_csv = tmp_path / "runs", tmp_path / "runs.csv"
+
+    for prefix, variant, acc_err in (("lin", "a", 0.45), ("base", "b", 0.1)):
+        for seed in (0, 1):
+            ev = RunEvaluator(labels, instances, valid)
+            pred_rng = np.random.default_rng(seed + (0 if variant == "a" else 10))
+            for i in range(n_patches):
+                flip = pred_rng.random((size, size)) < acc_err
+                pred = np.where(flip, (labels[i] + 1) % 3, labels[i])
+                ev.add(i, pred)
+            idx, cms = ev.result()
+            rid = run_name(prefix, variant, 1.0, "foldI", seed)
+            run = {"run_id": rid, "method": "baseline", "variant": variant, "label_frac": 1.0,
+                   "split": "foldI", "seed": seed, "n_params": 100, "train_seconds": 5.0}
+            log_run(runs_csv, runs_dir / rid, run, idx, cms, extra={"best_val_miou": 0.8, "best_step": 100})
+
+    out = tmp_path / "out"
+    per_seed, summary, deltas = summarize_runs(
+        runs_dir, out, name="check", variants=["lin_a", "base_b"], pairs=["base_b:lin_a"],
+        split="I", label_frac=1.0, seeds=(0, 1), n_boot=200,
+    )
+    assert len(per_seed) == 4 and len(summary) == 2 and len(deltas) == 3
+    assert set(deltas["region"]) == {"all", "boundary", "core"}
+    assert (deltas["delta_mean"] > 0).all() and (deltas["ci_low"] > 0).all()
+    for fname in ("check_per_seed.csv", "check_summary.csv", "check_deltas.csv", "check_per_class.png"):
+        assert (out / fname).exists()
+
+
+def test_unet_width_rule():
+    pytest.importorskip("pandas")
+    pytest.importorskip("matplotlib")
+    from scripts.select_unet_width import choose
+
+    up = {"ci_low": 0.002, "ci_high": 0.01}
+    flat = {"ci_low": -0.01, "ci_high": 0.01}
+    down = {"ci_low": -0.03, "ci_high": -0.01}
+    assert choose([up, flat]) and choose([flat, up])
+    assert not choose([flat, flat])  # no clear gain: the narrow width is kept
+    assert not choose([up, down])  # better at one label fraction, worse at the other

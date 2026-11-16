@@ -2,7 +2,9 @@
 
 For every test patch three confusion matrices are kept (all valid pixels, parcel
 boundary, parcel core) in <run_dir>/cm_per_patch.npz, so that any score and its
-bootstrap interval can be recomputed later without the predictions.
+bootstrap interval can be recomputed later without the predictions. Trained heads
+also keep the same matrices for their validation patches (cm_val_per_patch.npz),
+used for choices made on validation only (e.g. the UNet width).
 Run names follow {method}_{variant}_{label%}_{split}_s{seed}, e.g. m1_gated_010_foldI_s1.
 """
 
@@ -69,8 +71,7 @@ def log_run(runs_csv, run_dir, run, idx, cms, extra=None):
     `run` holds run_id, method, variant, label_frac, split, seed, n_params, train_seconds.
     """
     run_dir = Path(run_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(run_dir / "cm_per_patch.npz", idx=idx, all=cms[:, 0], boundary=cms[:, 1], core=cms[:, 2])
+    save_cms(run_dir, idx, cms)
     row = {**run, **scores(cms), "n_test_patches": len(idx), "commit": code_version(),
            "finished_utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     (run_dir / "run.json").write_text(json.dumps({**row, **(extra or {})}, indent=2, default=float))
@@ -90,7 +91,17 @@ def log_run(runs_csv, run_dir, run, idx, cms, extra=None):
     return row
 
 
-def load_cms(run_dir, region="all"):
-    """(idx, (N, K, K)) per-patch matrices of a finished run; region: all, boundary or core."""
-    with np.load(Path(run_dir) / "cm_per_patch.npz") as d:
+CMS_FILES = {"test": "cm_per_patch.npz", "val": "cm_val_per_patch.npz"}
+
+
+def save_cms(run_dir, idx, cms, part="test"):
+    """Save the (N, 3, K, K) per-patch matrices of the test (or validation) patches of a run."""
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(run_dir / CMS_FILES[part], idx=idx, all=cms[:, 0], boundary=cms[:, 1], core=cms[:, 2])
+
+
+def load_cms(run_dir, region="all", part="test"):
+    """(idx, (N, K, K)) per-patch matrices of a finished run; region: all, boundary or core; part: test or val."""
+    with np.load(Path(run_dir) / CMS_FILES[part]) as d:
         return d["idx"], d[region]

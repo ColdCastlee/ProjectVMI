@@ -7,7 +7,8 @@ weight decay 1e-4), cosine schedule, mixed precision on GPU, cross-entropy
 weighted by 1/sqrt(class frequency) of the labelled training pixels,
 ignore_index 19 (void and pixels outside the shared valid mask). The validation
 mIoU is computed every `eval_every` steps; the weights with the best validation
-mIoU are evaluated on the test patches at the end.
+mIoU are evaluated on the test patches at the end, and on the validation
+patches (per-patch matrices kept for choices made on validation only).
 
 The checkpoint (model, optimizer, scheduler, scaler, random states, best weights,
 validation history) is written to the run folder every `checkpoint_every` steps.
@@ -33,7 +34,7 @@ import torch.nn.functional as F
 from ..data.splits import load_split, split_tag
 from ..data.subsets import label_subset
 from ..eval.metrics import N_CLASSES, miou
-from ..eval.runs import RunEvaluator, log_run, run_name
+from ..eval.runs import CMS_FILES, RunEvaluator, log_run, run_name, save_cms
 from ..models.unet import build_head, count_parameters
 from .batches import BatchOrder, DeviceData, device_steps, loader_batches, loader_steps
 from .data import IGNORE, InputStack, class_weights
@@ -110,6 +111,44 @@ def val_miou(model, batches, device, amp):
     return float(miou(cm.view(N_CLASSES, N_CLASSES).cpu().numpy()))
 
 
+def evaluate(model, stack, labels, instances, valid, patches, device, amp, batch_size, workers):
+    """Per-patch matrices (all, boundary, core) of the model on `patches`, read from the disk."""
+    evaluator = RunEvaluator(labels, instances, valid)
+    batches = loader_batches(stack, labels, valid, patches, device, batch_size, workers)
+    for pred, _, idx in predictions(model, batches, device, amp):
+        for p, i in zip(pred.cpu().numpy(), idx):
+            evaluator.add(i, p)
+    return evaluator.result()
+
+
+def add_val_cms(run_dir, processed, device, log=print):
+    """Validation matrices of a run finished before they were saved, from best.pt and run.json.
+
+    The standardisation is fitted again on the patches recorded in run.json (stats_patches),
+    which gives the statistics of the run.
+    """
+    run_dir, processed = Path(run_dir), Path(processed)
+    info = json.loads((run_dir / "run.json").read_text())
+    cfg = TrainConfig(**info["config"])
+    amp = cfg.amp and device.type == "cuda"
+    labels = np.load(processed / "labels.npy")
+    valid = np.load(processed / "valid_mask.npy")
+    instances = np.load(processed / "instances.npy", mmap_mode="r")
+    val = np.asarray(load_split(processed, cfg.split)["val"])
+    stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=labels.shape[-1])
+    fit = np.asarray(info["stats_patches"])
+    stack.fit_stats(fit, valid, max_patches=len(fit))
+    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout)
+    model.load_state_dict(torch.load(run_dir / "best.pt", map_location="cpu"))
+    model.to(device)
+    idx, cms = evaluate(model, stack, labels, instances, valid, val, device, amp, cfg.eval_batch_size, cfg.workers)
+    save_cms(run_dir, idx, cms, "val")
+    m = float(miou(cms[:, 0].sum(axis=0)))
+    log(f"{cfg.run_id}: already finished; validation matrices added (validation mIoU {m:.4f}, "
+        f"best during training {info['best_val_miou']:.4f})")
+    return m
+
+
 def comparable(config):
     return {k: v for k, v in config.items() if k not in RUNTIME_FIELDS}
 
@@ -135,10 +174,13 @@ def train_run(cfg, processed, runs_dir, runs_csv, device=None, stop_at=None, rer
     processed, run_dir = Path(processed), Path(runs_dir) / cfg.run_id
     ckpt_file = run_dir / "last.pt"
     if rerun:
-        for f in ("run.json", "cm_per_patch.npz", "best.pt", "last.pt"):
+        for f in ("run.json", *CMS_FILES.values(), "best.pt", "last.pt"):
             (run_dir / f).unlink(missing_ok=True)
     if (run_dir / "run.json").exists():
-        log(f"{cfg.run_id}: already finished, skipped")
+        if not (run_dir / CMS_FILES["val"]).exists() and (run_dir / "best.pt").exists():
+            add_val_cms(run_dir, processed, device, log)
+        else:
+            log(f"{cfg.run_id}: already finished, skipped")
         return json.loads((run_dir / "run.json").read_text())
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -240,18 +282,16 @@ def train_run(cfg, processed, runs_dir, runs_csv, device=None, stop_at=None, rer
             log(f"{cfg.run_id}: stopped at step {step}; run the same command again to continue")
             return None
 
-    # test: the weights with the best validation mIoU (the training data leave the GPU first)
+    # test and validation: the weights with the best validation mIoU (the training data leave the GPU first)
     steps = val_batches = train_data = val_data = x = y = None
     if device.type == "cuda":
         torch.cuda.empty_cache()
     model.load_state_dict(state["best_model"])
     torch.save(state["best_model"], run_dir / "best.pt")
-    evaluator = RunEvaluator(labels, instances, valid)
-    test_batches = loader_batches(stack, labels, valid, test, device, cfg.eval_batch_size, cfg.workers)
-    for pred, _, idx in predictions(model, test_batches, device, amp):
-        for p, i in zip(pred.cpu().numpy(), idx):
-            evaluator.add(i, p)
-    ids, cms = evaluator.result()
+    ids, cms = evaluate(model, stack, labels, instances, valid, test, device, amp, cfg.eval_batch_size, cfg.workers)
+    val_ids, val_cms = evaluate(model, stack, labels, instances, valid, val, device, amp, cfg.eval_batch_size,
+                                cfg.workers)
+    save_cms(run_dir, val_ids, val_cms, "val")  # before run.json, which marks the run as finished
 
     run = {"run_id": cfg.run_id, "method": cfg.method, "variant": cfg.run_variant, "label_frac": cfg.label_frac,
            "split": split_tag(cfg.split), "seed": cfg.seed, "n_params": count_parameters(model),

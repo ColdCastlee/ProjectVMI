@@ -1,5 +1,6 @@
 """A few training steps on a tiny fake dataset (CPU): outputs of a run, skipping, low-label
-subset, and the same run from both data paths and after an interruption."""
+subset, the same run from both data paths and after an interruption, and the validation
+matrices added to a run finished without them."""
 
 import json
 
@@ -9,6 +10,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from src.train.batches import BatchOrder
+from src.eval.metrics import miou
+from src.eval.runs import load_cms
 from src.train.loop import TrainConfig, train_run
 
 N, SIZE = 12, 16
@@ -62,6 +65,7 @@ def test_run_outputs_and_skip(processed):
     assert row["run_id"] == "base_unet-test-w4_100_foldI_s0" and 0 <= row["miou"] <= 1
     d = processed / "runs" / row["run_id"]
     assert (d / "best.pt").exists() and (d / "cm_per_patch.npz").exists() and not (d / "last.pt").exists()
+    assert (d / "cm_val_per_patch.npz").exists()
     info = run_info(processed, "runs", row)
     assert [h["step"] for h in info["history"]] == [2, 4, 6] and info["best_step"] in (2, 4, 6)
     assert info["n_test_patches"] == 2 and len(info["train_patches"]) == 8
@@ -87,3 +91,16 @@ def test_same_run_from_both_data_paths_and_after_interruption(processed):
         assert run_info(processed, name, row)["history"] == run_info(processed, "a", a)["history"]
         best = torch.load(processed / name / row["run_id"] / "best.pt")
         assert all(torch.equal(best[k], best_a[k]) for k in best_a)
+
+
+def test_val_matrices_added_to_finished_run(processed):
+    row = run(processed, "runs", config())
+    d = processed / "runs" / row["run_id"]
+    idx, cms = load_cms(d, part="val")
+    assert idx.tolist() == [8, 9]
+    assert miou(cms.sum(axis=0)) == pytest.approx(run_info(processed, "runs", row)["best_val_miou"], abs=1e-9)
+    (d / "cm_val_per_patch.npz").unlink()  # as for a run finished before the matrices were saved
+    again = run(processed, "runs", config())
+    assert again["finished_utc"] == row["finished_utc"]  # not trained again
+    idx2, cms2 = load_cms(d, part="val")
+    assert np.array_equal(idx2, idx) and np.array_equal(cms2, cms)
