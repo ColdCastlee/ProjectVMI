@@ -1,0 +1,2 @@
+Méthode,Époque retenue,mIoU test (%),Macro-F1 test (%),Exactitude pixel (%)
+10 dates (budget de 61 époques),54,63.3372738921953,76.0677694694254,83.58215147930365

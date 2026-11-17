@@ -1,0 +1,2 @@
+Méthode,Époque retenue,mIoU test (%),Macro-F1 test (%),Exactitude pixel (%)
+Sentinel-2 seul (budget de 61 époques),60,43.93969178199768,57.45775103569031,75.44768452644348
