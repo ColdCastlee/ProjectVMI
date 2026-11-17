@@ -23,7 +23,7 @@ import math
 import os
 import time
 import warnings
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from functools import partial
 from pathlib import Path
 
@@ -49,7 +49,6 @@ class TrainConfig:
     variant: str
     head: str = "unet"
     widths: tuple = (32, 64, 128)
-    hidden: int = 128
     dropout: float = 0.1
     method: str = "baseline"
     prefix: str = "base"
@@ -129,13 +128,14 @@ def load_trained(run_dir, processed, device, valid=None):
     """
     run_dir, processed = Path(run_dir), Path(processed)
     info = json.loads((run_dir / "run.json").read_text())
-    cfg = TrainConfig(**info["config"])
+    known = {f.name for f in fields(TrainConfig)}  # runs before Part 3 also stored the MLP width `hidden`
+    cfg = TrainConfig(**{k: v for k, v in info["config"].items() if k in known})
     if valid is None:
         valid = np.load(processed / "valid_mask.npy")
     stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=valid.shape[-1])
     fit = np.asarray(info["stats_patches"])
     stack.fit_stats(fit, valid, max_patches=len(fit))
-    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout,
+    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.dropout,
                        stack.channels)
     model.load_state_dict(torch.load(run_dir / "best.pt", map_location="cpu"))
     return cfg, stack, model.to(device).eval()
@@ -204,7 +204,7 @@ def train_run(cfg, processed, runs_dir, runs_csv, device=None, stop_at=None, rer
 
     set_seed(cfg.seed)
     stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=labels.shape[-1])
-    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.hidden, cfg.dropout,
+    model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.dropout,
                        stack.channels).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     sched = torch.optim.lr_scheduler.LambdaLR(

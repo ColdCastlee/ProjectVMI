@@ -74,8 +74,8 @@ def test_run_outputs_and_skip(processed):
 
 
 def test_low_label_subset(processed):
-    row = run(processed, "runs", config(label_frac=0.25, head="mlp", variant="mlp-test", hidden=8))
-    assert row["run_id"] == "base_mlp-test_025_foldI_s0"
+    row = run(processed, "runs", config(label_frac=0.25))
+    assert row["run_id"] == "base_unet-test-w4_025_foldI_s0"
     info = run_info(processed, "runs", row)
     assert info["subset"]["n_patches"] == 2 and len(info["train_patches"]) == 2
 

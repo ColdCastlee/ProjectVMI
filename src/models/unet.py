@@ -1,7 +1,5 @@
 """Segmentation heads trained on frozen inputs.
 
-- PixelMLP (baselines B1/B4): two 1x1 convolutions, so each pixel is classified
-  from its own features only (no spatial context).
 - LightUNet (baselines B2/B5/B6 and the fusion variants): a 1x1 convolution maps
   the C input channels to the first width, then a 3-level UNet (two 3x3
   conv-BN-ReLU per level, max-pooling down, bilinear upsampling with skip
@@ -54,16 +52,6 @@ def up(x, like):
     return F.interpolate(x, size=like.shape[-2:], mode="bilinear", align_corners=False)
 
 
-class PixelMLP(nn.Module):
-    def __init__(self, in_channels, n_classes=19, hidden=128, dropout=0.1):
-        super().__init__()
-        self.net = nn.Sequential(nn.Conv2d(in_channels, hidden, 1), nn.ReLU(inplace=True), nn.Dropout(dropout),
-                                 nn.Conv2d(hidden, n_classes, 1))
-
-    def forward(self, x):
-        return self.net(x)
-
-
 class GatedFusionUNet(nn.Module):
     """Pixel-wise gate between two sources stacked on the channels, then a LightUNet."""
 
@@ -86,17 +74,15 @@ class GatedFusionUNet(nn.Module):
         return self.unet(a * self.proj[0](x1) + (1 - a) * self.proj[1](x2))
 
 
-def build_head(name, in_channels, n_classes=19, widths=(32, 64, 128), hidden=128, dropout=0.1, splits=None):
+def build_head(name, in_channels, n_classes=19, widths=(32, 64, 128), dropout=0.1, splits=None):
     """splits: input channels of each source (needed by the gated head only)."""
     if name == "unet":
         return LightUNet(in_channels, n_classes, tuple(widths), dropout)
-    if name == "mlp":
-        return PixelMLP(in_channels, n_classes, hidden, dropout)
     if name == "gated":
         if splits is None or sum(splits) != in_channels:
             raise ValueError(f"gated head: channels per source {splits} do not add up to {in_channels}")
         return GatedFusionUNet(splits, n_classes, tuple(widths), dropout)
-    raise ValueError(f"unknown head {name!r}: use 'unet', 'mlp' or 'gated'")
+    raise ValueError(f"unknown head {name!r}: use 'unet' or 'gated'")
 
 
 def count_parameters(model):

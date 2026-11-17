@@ -2,7 +2,7 @@
 
 Reads <runs_dir>/<run_id>/run.json and cm_per_patch.npz for every (variant, seed)
 of a split and label fraction. Variants are written with their prefix, e.g.
-lin_t19, base_mlp-t19, base_unet-t19-w32.
+lin_t19, base_unet-t19-w32, m1_unet-t19-ae19-w32.
 
 Outputs in --out: <name>_per_seed.csv, <name>_summary.csv, <name>_deltas.csv
 (all valid pixels, parcel boundary and parcel core) and <name>_per_class.png.
@@ -31,17 +31,10 @@ from src.eval.metrics import CLASS_NAMES, N_CLASSES
 from src.eval.runs import load_cms, run_name
 
 REGIONS = ("all", "boundary", "core")
-DEFAULT_VARIANTS = [
-    "lin_t19", "base_mlp-t19", "base_unet-t19-w32",
-    "lin_ae19", "base_mlp-ae19", "base_unet-ae19-w32",
-]
+DEFAULT_VARIANTS = ["lin_t19", "base_unet-t19-w32", "lin_ae19", "base_unet-ae19-w32"]
 DEFAULT_PAIRS = [
     "base_unet-t19-w32:lin_t19",
-    "base_unet-t19-w32:base_mlp-t19",
-    "base_mlp-t19:lin_t19",
     "base_unet-ae19-w32:lin_ae19",
-    "base_unet-ae19-w32:base_mlp-ae19",
-    "base_mlp-ae19:lin_ae19",
     "base_unet-t19-w32:base_unet-ae19-w32",
 ]
 
