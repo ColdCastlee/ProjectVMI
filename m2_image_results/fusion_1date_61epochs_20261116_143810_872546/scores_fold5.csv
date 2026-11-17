@@ -1,0 +1,2 @@
+Méthode,Époque retenue,mIoU test (%),Macro-F1 test (%),Exactitude pixel (%)
+Fusion à 1 date (budget de 61 époques),54,63.49266171455383,76.17933750152588,83.64099860191345

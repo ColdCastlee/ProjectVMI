@@ -1,0 +1,2 @@
+Méthode,Époque retenue,mIoU test (%),Macro-F1 test (%),Exactitude pixel (%)
+TESSERA seul (budget de 61 époques),52,62.692280486989816,75.52176200932081,83.5647693134334
