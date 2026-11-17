@@ -172,3 +172,44 @@ def test_summarize_runs(tmp_path):
     assert (deltas["delta_mean"] > 0).all() and (deltas["ci_low"] > 0).all()
     for fname in ("check_per_seed.csv", "check_summary.csv", "check_deltas.csv", "check_per_class.png"):
         assert (out / fname).exists()
+
+
+def test_summarize_folds(tmp_path):
+    pytest.importorskip("pandas")
+    pytest.importorskip("matplotlib")
+    from scripts.summarize_folds import summarize_folds
+
+    rng = np.random.default_rng(0)
+    n_patches, size = 12, 8
+    labels = rng.integers(0, 3, size=(n_patches, size, size), dtype=np.uint8)
+    instances = np.zeros((n_patches, size, size), dtype=np.int32)
+    instances[:, :, :4], instances[:, :, 4:] = 1, 2
+    valid = np.ones_like(labels, dtype=bool)
+    runs_dir, runs_csv = tmp_path / "runs", tmp_path / "runs.csv"
+    test_of = {"I": range(0, 6), "II": range(6, 12)}  # disjoint test patches, as in the official folds
+
+    for prefix, variant, err in (("base", "a", 0.45), ("m1", "b", 0.1)):
+        for split, patches in test_of.items():
+            ev = RunEvaluator(labels, instances, valid)
+            pred_rng = np.random.default_rng(len(split) + (0 if variant == "a" else 10))
+            for i in patches:
+                flip = pred_rng.random((size, size)) < err
+                ev.add(i, np.where(flip, (labels[i] + 1) % 3, labels[i]))
+            idx, cms = ev.result()
+            rid = run_name(prefix, variant, 1.0, f"fold{split}", 0)
+            run = {"run_id": rid, "method": prefix, "variant": variant, "label_frac": 1.0,
+                   "split": f"fold{split}", "seed": 0, "n_params": 100, "train_seconds": 5.0}
+            log_run(runs_csv, runs_dir / rid, run, idx, cms, extra={"best_val_miou": 0.8})
+
+    out = tmp_path / "out"
+    per_fold, summary, deltas = summarize_folds(runs_dir, out, name="pool", variants=["base_a", "m1_b"],
+                                                pairs=["m1_b:base_a"], splits=["I", "II"], n_boot=200)
+    assert len(per_fold) == 4 and len(summary) == 2 and (summary.patches == n_patches).all()
+    assert len(deltas) == 3 and (deltas.delta_pooled > 0).all() and (deltas.ci_low > 0).all()
+    assert (deltas.folds_positive == 2).all()
+    pooled = summary.set_index("variant").loc["m1_b"]
+    assert pooled.miou_ci_low <= pooled.miou_pooled <= pooled.miou_ci_high
+    for fname in ("pool_per_fold.csv", "pool_summary.csv", "pool_deltas.csv", "pool_per_class.png"):
+        assert (out / fname).exists()
+    with pytest.raises(ValueError):  # the same fold twice: patches counted twice
+        summarize_folds(runs_dir, out, name="dup", variants=["base_a"], splits=["I", "I"], n_boot=10)
