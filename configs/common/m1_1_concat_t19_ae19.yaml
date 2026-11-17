@@ -1,0 +1,12 @@
+# M1-1: early concatenation [TESSERA 2019; AlphaEarth 2019] = 192 channels, light UNet
+# Common training recipe, chosen on the validation patches of fold I (notebooks/baselines/04_recipe.ipynb):
+# lr 1e-3, cosine schedule to 0, plain cross-entropy (no class weights); everything else as before.
+method: m1
+prefix: m1
+variant: unet-t19-ae19-lr1e3-nocw
+sources: [tessera_2019, ae_2019]
+head: unet
+widths: [32, 64, 128]
+lr: 0.001
+schedule: cosine
+class_weighting: none

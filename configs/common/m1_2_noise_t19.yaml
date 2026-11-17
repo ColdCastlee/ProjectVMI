@@ -1,0 +1,12 @@
+# M1-2: [TESSERA 2019; 64 channels of N(0, 1) noise], light UNet: is the gain of M1-1 only due to more channels?
+# Common training recipe, chosen on the validation patches of fold I (notebooks/baselines/04_recipe.ipynb):
+# lr 1e-3, cosine schedule to 0, plain cross-entropy (no class weights); everything else as before.
+method: m1
+prefix: m1
+variant: unet-t19-noise-lr1e3-nocw
+sources: [tessera_2019, noise]
+head: unet
+widths: [32, 64, 128]
+lr: 0.001
+schedule: cosine
+class_weighting: none
