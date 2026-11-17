@@ -1,0 +1,11 @@
+# Training recipe check on B2 (TESSERA 2019, light UNet 32-64-128): lr 1e-3, cosine schedule, class weights 1/sqrt(frequency).
+# Compared with B2 (lr 1e-4, cosine, 1/sqrt weights) on the validation patches of fold I only.
+method: baseline
+prefix: base
+variant: unet-t19-lr1e3
+sources: [tessera_2019]
+head: unet
+widths: [32, 64, 128]
+lr: 0.001
+schedule: cosine
+class_weighting: sqrt

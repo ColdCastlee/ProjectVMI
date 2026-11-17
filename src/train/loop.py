@@ -3,9 +3,11 @@
 Budget in optimizer steps, the same for every variant and every label fraction:
 3,600 steps of 32 patches = 80 epochs of the 1,455 training patches of fold I
 (at 1% labels the 15 patches are seen 3,600 times instead of 80). AdamW (lr 1e-4,
-weight decay 1e-4), cosine schedule, mixed precision on GPU, cross-entropy
-weighted by 1/sqrt(class frequency) of the labelled training pixels,
-ignore_index 19 (void and pixels outside the shared valid mask). The validation
+weight decay 1e-4), cosine schedule to 0 (or a constant learning rate,
+schedule="constant"), mixed precision on GPU, cross-entropy weighted by
+1/sqrt(class frequency) of the labelled training pixels (or unweighted,
+class_weighting="none"), ignore_index 19 (void and pixels outside the shared
+valid mask). The validation
 mIoU is computed every `eval_every` steps; the weights with the best validation
 mIoU are evaluated on the test patches at the end, and on the validation
 patches (per-patch matrices kept for choices made on validation only).
@@ -41,6 +43,10 @@ from .data import IGNORE, InputStack, class_weights
 
 # fields that do not change the result: a run may continue with other values
 RUNTIME_FIELDS = ("data_on_device", "workers", "eval_batch_size", "checkpoint_every")
+# fields added later, with the value that runs written before them used
+LATER_DEFAULTS = {"class_weighting": "sqrt", "schedule": "cosine"}
+CLASS_WEIGHTINGS = ("sqrt", "none")
+SCHEDULES = ("cosine", "constant")
 
 
 @dataclass
@@ -62,6 +68,8 @@ class TrainConfig:
     eval_batch_size: int = 32
     lr: float = 1e-4
     weight_decay: float = 1e-4
+    schedule: str = "cosine"  # cosine decay to 0 over `steps`, or "constant"
+    class_weighting: str = "sqrt"  # 1/sqrt(class frequency), or "none" (plain cross-entropy)
     amp: bool = True
     stats_patches: int = 400
     data_on_device: bool = True
@@ -71,6 +79,11 @@ class TrainConfig:
         self.sources = list(self.sources)
         self.widths = tuple(int(w) for w in self.widths)
         self.label_frac, self.seed = float(self.label_frac), int(self.seed)
+        self.lr, self.weight_decay = float(self.lr), float(self.weight_decay)
+        if self.schedule not in SCHEDULES:
+            raise ValueError(f"schedule {self.schedule!r} not in {SCHEDULES}")
+        if self.class_weighting not in CLASS_WEIGHTINGS:
+            raise ValueError(f"class_weighting {self.class_weighting!r} not in {CLASS_WEIGHTINGS}")
 
     @property
     def run_variant(self):
@@ -159,8 +172,15 @@ def add_val_cms(run_dir, processed, device, log=print):
     return m
 
 
+def lr_factor(schedule, steps, step):
+    """Learning rate at `step` as a fraction of the base learning rate."""
+    if schedule == "constant":
+        return 1.0
+    return 0.5 * (1 + math.cos(math.pi * min(step, steps) / steps))
+
+
 def comparable(config):
-    return {k: v for k, v in config.items() if k not in RUNTIME_FIELDS}
+    return {k: v for k, v in {**LATER_DEFAULTS, **config}.items() if k not in RUNTIME_FIELDS}
 
 
 def save(obj, path):
@@ -201,14 +221,15 @@ def train_run(cfg, processed, runs_dir, runs_csv, device=None, stop_at=None, rer
     val, test = np.asarray(part["val"]), np.asarray(part["test"])
     train, subset = label_subset(labels, valid, part["train"], cfg.label_frac, cfg.seed)
     weights, _ = class_weights(labels, valid, train)
+    if cfg.class_weighting == "none":
+        weights = np.ones_like(weights)
 
     set_seed(cfg.seed)
     stack = InputStack(processed, cfg.sources, noise_seed=cfg.seed, size=labels.shape[-1])
     model = build_head(cfg.head, stack.in_channels, N_CLASSES, cfg.widths, cfg.dropout,
                        stack.channels).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    sched = torch.optim.lr_scheduler.LambdaLR(
-        opt, lambda s: 0.5 * (1 + math.cos(math.pi * min(s, cfg.steps) / cfg.steps)))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, partial(lr_factor, cfg.schedule, cfg.steps))
     scaler = torch.amp.GradScaler(device.type, enabled=amp)
     config = asdict(cfg)
     state = {"step": 0, "seconds": 0.0, "loss_sum": 0.0, "loss_n": 0, "history": [],

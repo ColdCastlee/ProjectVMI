@@ -106,6 +106,29 @@ def test_val_matrices_added_to_finished_run(processed):
     assert np.array_equal(idx2, idx) and np.array_equal(cms2, cms)
 
 
+def test_schedule_and_class_weighting(processed):
+    from dataclasses import asdict
+
+    from src.train.loop import comparable
+
+    base = run_info(processed, "runs", run(processed, "runs", config(lr=1e-3)))
+    lrs = [h["lr"] for h in base["history"]]
+    assert lrs[0] < 1e-3 and lrs[-1] == pytest.approx(0, abs=1e-12)  # cosine to 0
+    assert len(set(base["class_weights"])) > 1  # 1/sqrt(frequency)
+    row = run(processed, "runs", config(variant="unet-test-const", lr="1e-3", schedule="constant",
+                                        class_weighting="none"))
+    info = run_info(processed, "runs", row)
+    assert [h["lr"] for h in info["history"]] == [1e-3] * 3  # YAML reads 1e-3 as text: converted to float
+    assert info["class_weights"] == [1.0] * len(info["class_weights"])
+    with pytest.raises(ValueError):
+        config(schedule="linear")
+    with pytest.raises(ValueError):
+        config(class_weighting="inverse")
+    # a checkpoint written before these options resumes with the default recipe
+    old = {k: v for k, v in asdict(config()).items() if k not in ("schedule", "class_weighting")}
+    assert comparable(old) == comparable(asdict(config()))
+
+
 def test_gated_run_and_late_fusion(processed):
     from scripts.m1_late_fusion import late_cms
     from src.train.loop import load_trained
