@@ -188,18 +188,19 @@ def test_summarize_folds(tmp_path):
     runs_dir, runs_csv = tmp_path / "runs", tmp_path / "runs.csv"
     test_of = {"I": range(0, 6), "II": range(6, 12)}  # disjoint test patches, as in the official folds
 
-    for prefix, variant, err in (("base", "a", 0.45), ("m1", "b", 0.1)):
-        for split, patches in test_of.items():
-            ev = RunEvaluator(labels, instances, valid)
-            pred_rng = np.random.default_rng(len(split) + (0 if variant == "a" else 10))
-            for i in patches:
-                flip = pred_rng.random((size, size)) < err
-                ev.add(i, np.where(flip, (labels[i] + 1) % 3, labels[i]))
-            idx, cms = ev.result()
-            rid = run_name(prefix, variant, 1.0, f"fold{split}", 0)
-            run = {"run_id": rid, "method": prefix, "variant": variant, "label_frac": 1.0,
-                   "split": f"fold{split}", "seed": 0, "n_params": 100, "train_seconds": 5.0}
-            log_run(runs_csv, runs_dir / rid, run, idx, cms, extra={"best_val_miou": 0.8})
+    for seed in (0, 1):
+        for prefix, variant, err in (("base", "a", 0.45), ("m1", "b", 0.1)):
+            for split, patches in test_of.items():
+                ev = RunEvaluator(labels, instances, valid)
+                pred_rng = np.random.default_rng(len(split) + (0 if variant == "a" else 10) + 100 * seed)
+                for i in patches:
+                    flip = pred_rng.random((size, size)) < err
+                    ev.add(i, np.where(flip, (labels[i] + 1) % 3, labels[i]))
+                idx, cms = ev.result()
+                rid = run_name(prefix, variant, 1.0, f"fold{split}", seed)
+                run = {"run_id": rid, "method": prefix, "variant": variant, "label_frac": 1.0,
+                       "split": f"fold{split}", "seed": seed, "n_params": 100, "train_seconds": 5.0}
+                log_run(runs_csv, runs_dir / rid, run, idx, cms, extra={"best_val_miou": 0.8})
 
     out = tmp_path / "out"
     per_fold, summary, deltas = summarize_folds(runs_dir, out, name="pool", variants=["base_a", "m1_b"],
@@ -213,3 +214,15 @@ def test_summarize_folds(tmp_path):
         assert (out / fname).exists()
     with pytest.raises(ValueError):  # the same fold twice: patches counted twice
         summarize_folds(runs_dir, out, name="dup", variants=["base_a"], splits=["I", "I"], n_boot=10)
+
+    # several seeds: pooled mIoU and differences are means over seeds; one seed gives the same as before
+    common = dict(variants=["base_a", "m1_b"], pairs=["m1_b:base_a"], splits=["I", "II"], n_boot=200)
+    _, summary0, deltas0 = summarize_folds(runs_dir, out, name="one", seeds=[0], **common)
+    assert np.allclose(summary0.miou_pooled, summary.miou_pooled) and np.allclose(summary0.miou_ci_low, summary.miou_ci_low)
+    assert np.allclose(deltas0.ci_low, deltas.ci_low) and np.allclose(deltas0.ci_high, deltas.ci_high)
+    per_fold2, summary2, deltas2 = summarize_folds(runs_dir, out, name="two", seeds=[0, 1], **common)
+    assert len(per_fold2) == 8 and (summary2.seeds == 2).all() and set(per_fold2.seed) == {0, 1}
+    deltas1 = summarize_folds(runs_dir, out, name="seed1", seed=1, **common)[2]
+    expected = (deltas.delta_pooled.values + deltas1.delta_pooled.values) / 2
+    assert np.allclose(deltas2.delta_pooled.values, expected)
+    assert all(len(x.split()) == 2 for x in deltas2.per_seed)
